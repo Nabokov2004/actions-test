@@ -25,7 +25,7 @@ jobs:
         id: resolve
         env:
           MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-        run: python scripts/resolve_version.py
+        run: python .github/scripts/resolve_version.py
 
   tag:
     name: Create and push tag
