@@ -1,24 +1,27 @@
-import re, sys, subprocess, os
+import re, os
+
+PATTERN = r"__version__\s*=\s*['\"]([^'\"]+)['\"]"
 
 def get_version():
     content = open("analytics/_version.py").read()
-    m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", content)
+    m = re.search(PATTERN, content)
     if not m:
-        sys.exit("Could not find __version__ in analytics/_version.py")
+        raise SystemExit('Could not parse __version__ in analytics/_version.py')
     return f"v{m.group(1)}"
 
-def get_merge_sha():
-    # Prefer the env var GitHub sets, fall back to HEAD
-    return os.environ.get("MERGE_COMMIT_SHA") or \
-           subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+def get_sha():
+    sha = os.environ.get('MERGE_COMMIT_SHA')
+    if not sha:
+        raise SystemExit('MERGE_COMMIT_SHA environment variable not set')
+    return sha
 
 def set_output(key, value):
-    with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
         f.write(f"{key}={value}\n")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     tag = get_version()
-    sha = get_merge_sha()
+    sha = get_sha()
     print(f"New tag: {tag} → {sha}")
     set_output("new_tag", tag)
     set_output("full_sha", sha)
