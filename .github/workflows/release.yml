@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - deployment
+
+run-name: "Release — ${{ github.event.pull_request.title }}"
+jobs:
+  resolve:
+    name: Resolve SHA & version
+    runs-on: ubuntu-latest
+    # only run if PR was actually merged, not just closed
+    if: github.event.pull_request.merged == true
+    outputs:
+      full_sha: ${{ steps.resolve.outputs.full_sha }}
+      new_tag: ${{ steps.resolve.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve SHA and version
+        id: resolve
+        env:
+          MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: python scripts/resolve_version.py
+
+  tag:
+    name: Create and push tag
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ needs.resolve.outputs.new_tag }} ${{ needs.resolve.outputs.full_sha }}
+          git push origin ${{ needs.resolve.outputs.new_tag }}
+          echo "Tag ${{ needs.resolve.outputs.new_tag }} pushed → ${{ needs.resolve.outputs.full_sha }}"
+
+  github-release:
+    name: Create GitHub Release
+    needs: [resolve, tag]
+    runs-on: ubuntu-latest
+    if: always() && needs.tag.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ needs.resolve.outputs.new_tag }}
+          name: ${{ needs.resolve.outputs.new_tag }}
+          generate_release_notes: true
+          make_latest: true
+
+  # linear-release:
+  #   name: Sync to Linear
+  #   needs: [resolve, tag]
+  #   runs-on: ubuntu-latest
+  #   if: always() && needs.tag.result == 'success'
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #       with:
+  #         fetch-depth: 0
+
+  #     - name: Sync release to Linear
+  #       uses: linear/linear-release-action@v0
+  #       with:
+  #         access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+  #         version: ${{ needs.resolve.outputs.new_tag }}
